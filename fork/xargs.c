@@ -9,6 +9,48 @@
 #define NARGS 4
 #endif
 
+void
+xargs(char *lineas[], int cantidad_lineas, char *comando)
+{
+	int contador = 1;
+	int contador_argumentos = 1;
+	char *argumentos[NARGS + 2] = { comando, NULL };
+	int status;
+
+
+	while (contador <= (cantidad_lineas)) {
+		argumentos[contador_argumentos] = lineas[contador];
+		contador_argumentos++;
+		contador++;
+
+		if ((contador_argumentos) == (NARGS + 1) ||
+		    contador == cantidad_lineas + 1) {
+			int tenedor = fork();
+			if (tenedor > 0) {
+				waitpid(tenedor, &status, 0);
+				contador_argumentos = 1;
+				for (int j = 1; j < NARGS + 2; j++) {
+					free(argumentos[j]);
+					argumentos[j] = NULL;
+				}
+			}
+
+			if (tenedor < 0) {
+				perror("fork");
+				_exit(-1);
+			}
+
+			if (tenedor == 0) {
+				int ejecucion_execvp =
+				        execvp(comando, argumentos);
+				if (ejecucion_execvp < 1) {
+					perror("execvp");
+					_exit(-1);
+				}
+			}
+		}
+	}
+}
 
 int
 main(int argc, char *argv[])
@@ -18,60 +60,21 @@ main(int argc, char *argv[])
 		_exit(-1);
 	}
 
-
-	char *comando = NULL;
-	char *linea[NARGS + 2] = {};
-
-	int status;
-	int cantidad_lineas = 1;
-
-	comando = argv[1];
-
-
-	if (comando == NULL) {
-		printf("el comando no fue hallado\n");
-		_exit(-1);
-	}
-
-
-	linea[0] = comando;
-
 	size_t n = 0;
-	while (cantidad_lineas < (NARGS + 1) &&
-	       (getline(&linea[cantidad_lineas], &n, stdin)) > 0) {
+	ssize_t linea;
+	char *lineas[100] = { argv[1], NULL };
+	int cantidad_lineas = 0;
+
+	while ((linea = getline(&lineas[cantidad_lineas + 1], &n, stdin) != -1)) {
+		int len = strlen(lineas[cantidad_lineas + 1]);
+
+		if (lineas[cantidad_lineas + 1][len - 1] == '\n') {
+			lineas[cantidad_lineas + 1][len - 1] = '\0';
+		}
 		cantidad_lineas++;
 	}
 
-	if (cantidad_lineas > 1) {
-		linea[cantidad_lineas] = NULL;
+	xargs(lineas, cantidad_lineas, argv[1]);
 
-		for (int j = 1; j < cantidad_lineas; j++) {
-			int longitud = strlen(linea[j]);
-			if (linea[j][longitud - 1] == '\n') {
-				linea[j][longitud - 1] = '\0';
-			}
-		}
-
-
-		int tenedor = fork();
-		if (tenedor > 0) {
-			waitpid(tenedor, &status, 0);
-		}
-
-		if (tenedor < 0) {
-			perror("fork");
-			_exit(-1);
-		}
-
-		if (tenedor == 0) {
-			int ejecucion_execvp = execvp(comando, linea);
-			if (ejecucion_execvp < 1) {
-				perror("execvp");
-				_exit(-1);
-			}
-		}
-
-
-		return 0;
-	}
+	return 0;
 }
