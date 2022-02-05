@@ -10,45 +10,31 @@
 #endif
 
 void
-xargs(char *lineas[], int cantidad_lineas, char *comando)
+xargs(char *argumentos[], int cantidad_lineas, char *comando)
 {
-	int contador = 1;
-	int contador_argumentos = 1;
-	char *argumentos[NARGS + 2] = { comando, NULL };
+	argumentos[cantidad_lineas + 1] = NULL;
 	int status;
 
+	int tenedor = fork();
 
-	while (contador <= (cantidad_lineas)) {
-		argumentos[contador_argumentos] = lineas[contador];
-		contador_argumentos++;
-		contador++;
+	if (tenedor < 0) {
+		perror("fork");
+		_exit(-1);
+	}
 
-		if ((contador_argumentos) == (NARGS + 1) ||
-		    contador == cantidad_lineas + 1) {
-			int tenedor = fork();
-			if (tenedor > 0) {
-				waitpid(tenedor, &status, 0);
-				contador_argumentos = 1;
-				for (int j = 1; j < NARGS + 2; j++) {
-					free(argumentos[j]);
-					argumentos[j] = NULL;
-				}
-			}
+	if (tenedor > 0) {
+		waitpid(tenedor, &status, 0);
 
-			if (tenedor < 0) {
-				perror("fork");
-				_exit(-1);
-			}
-
-			if (tenedor == 0) {
-				int ejecucion_execvp =
-				        execvp(comando, argumentos);
-				if (ejecucion_execvp < 1) {
-					perror("execvp");
-					_exit(-1);
-				}
-			}
+		for (int j = 1; j < NARGS + 2; j++) {
+			free(argumentos[j]);
+			argumentos[j] = NULL;
 		}
+	}
+
+	if (tenedor == 0) {
+		execvp(comando, argumentos);
+		perror("execvp");
+		_exit(-1);
 	}
 }
 
@@ -62,19 +48,29 @@ main(int argc, char *argv[])
 
 	size_t n = 0;
 	ssize_t linea;
-	char *lineas[100] = { argv[1], NULL };
+	char *argumentos[NARGS + 2] = { argv[1], NULL };
 	int cantidad_lineas = 0;
 
-	while ((linea = getline(&lineas[cantidad_lineas + 1], &n, stdin) != -1)) {
-		int len = strlen(lineas[cantidad_lineas + 1]);
 
-		if (lineas[cantidad_lineas + 1][len - 1] == '\n') {
-			lineas[cantidad_lineas + 1][len - 1] = '\0';
+	while ((linea = getline(&argumentos[cantidad_lineas + 1], &n, stdin) !=
+	                -1)) {
+		int len = strlen(argumentos[cantidad_lineas + 1]);
+
+		if (argumentos[cantidad_lineas + 1][len - 1] == '\n') {
+			argumentos[cantidad_lineas + 1][len - 1] = '\0';
 		}
 		cantidad_lineas++;
+
+
+		if ((cantidad_lineas == NARGS)) {
+			xargs(argumentos, cantidad_lineas, argv[1]);
+			cantidad_lineas = 0;
+		}
 	}
 
-	xargs(lineas, cantidad_lineas, argv[1]);
+	if (cantidad_lineas > 0) {
+		xargs(argumentos, cantidad_lineas, argv[1]);
+	}
 
 	return 0;
 }
